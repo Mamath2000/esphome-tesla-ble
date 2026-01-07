@@ -25,6 +25,26 @@ Tested with M5Stack NanoC6 and Tesla firmwares 2024.26.3.1.
 
 ## Configuration
 
+### Entities declared in YAML (for `id:`, `!extend`, templates)
+
+By default, `tesla_ble_vehicle:` auto-creates all its entities (sensors/switches/buttons/...). That works well, but those entities don't exist in your YAML, so you can't use `!extend` on them.
+
+This repo now supports declaring the Tesla entities directly in YAML using platform blocks like `sensor: - platform: tesla_ble_vehicle ...`.
+
+To use that mode:
+
+```yaml
+packages:
+  client: !include packages/client.yml
+  tesla_entities: !include packages/entities.yml
+
+tesla_ble_vehicle:
+  id: tesla_ble_vehicle_id
+  auto_create_entities: false
+```
+
+You can then reference Tesla values in templates with `id(...)` (ESPHome lambdas) and you can `!extend` any of the ids from `packages/entities.yml`.
+
 ### Polling Intervals
 
 The component supports configurable polling intervals to balance responsiveness and battery life:

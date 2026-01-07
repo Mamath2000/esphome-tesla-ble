@@ -53,6 +53,28 @@ void TeslaBLEVehicle::initialize_managers() {
     
     TeslaBLE::g_log_callback = tesla_ble_log_callback;
     vehicle_ = std::make_shared<TeslaBLE::Vehicle>(ble_adapter_, storage_adapter_);
+
+    // Startup check: log presence of persisted keys in NVS
+    {
+        std::vector<uint8_t> buf;
+        if (storage_adapter_->load("private_key", buf)) {
+            ESP_LOGI(TAG, "NVS startup: private_key present (%u bytes)", (unsigned) buf.size());
+        } else {
+            ESP_LOGW(TAG, "NVS startup: private_key missing");
+        }
+        buf.clear();
+        if (storage_adapter_->load("session_vcsec", buf)) {
+            ESP_LOGI(TAG, "NVS startup: session_vcsec present (%u bytes)", (unsigned) buf.size());
+        } else {
+            ESP_LOGW(TAG, "NVS startup: session_vcsec missing");
+        }
+        buf.clear();
+        if (storage_adapter_->load("session_infotainment", buf)) {
+            ESP_LOGI(TAG, "NVS startup: session_infotainment present (%u bytes)", (unsigned) buf.size());
+        } else {
+            ESP_LOGW(TAG, "NVS startup: session_infotainment missing");
+        }
+    }
     state_manager_ = std::make_unique<VehicleStateManager>(this);
     
     ESP_LOGD(TAG, "Wiring up callbacks...");

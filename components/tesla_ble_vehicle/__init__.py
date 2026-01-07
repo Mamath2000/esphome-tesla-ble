@@ -71,6 +71,7 @@ SetChargingLimitAction = tesla_ble_vehicle_ns.class_("SetChargingLimitAction", a
 CONF_VIN = "vin"
 CONF_CHARGING_AMPS_MAX = "charging_amps_max"
 CONF_ROLE = "role"
+CONF_AUTO_CREATE_ENTITIES = "auto_create_entities"
 
 # Polling configuration constants
 CONF_VCSEC_POLL_INTERVAL = "vcsec_poll_interval"
@@ -236,6 +237,7 @@ CONFIG_SCHEMA = (
             cv.Required(CONF_VIN): cv.string,
             cv.Optional(CONF_CHARGING_AMPS_MAX, default=32): cv.int_range(min=1, max=48),
             cv.Optional(CONF_ROLE, default="DRIVER"): cv.enum(TESLA_ROLES, upper=True),
+            cv.Optional(CONF_AUTO_CREATE_ENTITIES, default=True): cv.boolean,
             # Polling intervals (in seconds)
             cv.Optional(CONF_VCSEC_POLL_INTERVAL, default=10): cv.int_range(min=5, max=300),
             cv.Optional(CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE, default=30): cv.int_range(min=10, max=600), 
@@ -473,37 +475,38 @@ async def to_code(config):
     cg.add(var.set_infotainment_poll_interval_active(config[CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE] * 1000))
     cg.add(var.set_infotainment_sleep_timeout(config[CONF_INFOTAINMENT_SLEEP_TIMEOUT] * 1000))
     
-    # Create all sensors using data-driven approach with generic setters
-    for definition in BINARY_SENSORS:
-        await create_binary_sensor(var, definition)
-    
-    for definition in SENSORS:
-        await create_sensor(var, definition)
-    
-    for definition in TEXT_SENSORS:
-        await create_text_sensor(var, definition)
-    
-    for definition in BUTTONS:
-        await create_button(var, definition)
-    
-    # Switches - data-driven approach
-    for definition in SWITCHES:
-        await create_switch(var, definition)
+    if config.get(CONF_AUTO_CREATE_ENTITIES, True):
+        # Create all entities using data-driven approach with generic setters
+        for definition in BINARY_SENSORS:
+            await create_binary_sensor(var, definition)
+        
+        for definition in SENSORS:
+            await create_sensor(var, definition)
+        
+        for definition in TEXT_SENSORS:
+            await create_text_sensor(var, definition)
+        
+        for definition in BUTTONS:
+            await create_button(var, definition)
+        
+        # Switches - data-driven approach
+        for definition in SWITCHES:
+            await create_switch(var, definition)
 
-    # Numbers - data-driven approach
-    for definition in NUMBERS:
-        await create_number(var, definition, config)
+        # Numbers - data-driven approach
+        for definition in NUMBERS:
+            await create_number(var, definition, config)
 
-    # Locks - combined entities for doors and charge port
-    for definition in LOCKS:
-        await create_lock(var, definition)
+        # Locks - combined entities for doors and charge port
+        for definition in LOCKS:
+            await create_lock(var, definition)
 
-    # Covers - combined entities for trunk, frunk, windows
-    for definition in COVERS:
-        await create_cover(var, definition)
+        # Covers - combined entities for trunk, frunk, windows
+        for definition in COVERS:
+            await create_cover(var, definition)
 
-    # Climate - HVAC control
-    await create_climate_entity(var, CLIMATE)
+        # Climate - HVAC control
+        await create_climate_entity(var, CLIMATE)
 
 
 # =============================================================================
