@@ -200,17 +200,30 @@ void TeslaBLEVehicle::update() {
   const bool is_active = state_manager_->is_charging() ||
                          state_manager_->is_user_present() ||
                          state_manager_->is_unlocked();
-  uint32_t infotainment_interval = infotainment_poll_interval_awake_;
-  if (is_asleep) {
-    infotainment_interval = infotainment_sleep_timeout_;
-  } else if (is_active) {
-    infotainment_interval = infotainment_poll_interval_active_;
+  if (last_asleep_state_ && !is_asleep) {
+    last_awake_activity_ = now;
+    ESP_LOGI(TAG, "Vehicle woke up - enabling infotainment polling window");
+  }
+  last_asleep_state_ = is_asleep;
+
+  if (is_active) {
+    last_awake_activity_ = now;
   }
 
-  if (now - last_infotainment_poll_ >= infotainment_interval) {
+  const bool should_poll_infotainment =
+      !is_asleep && (is_active || now - last_awake_activity_ < infotainment_sleep_timeout_);
+  const bool should_force_wake_infotainment = is_active;
+
+  uint32_t infotainment_interval = 0;
+  if (is_active) {
+    infotainment_interval = infotainment_poll_interval_active_;
+  } else if (should_poll_infotainment) {
+    infotainment_interval = infotainment_poll_interval_awake_;
+  }
+
+  if (infotainment_interval != 0 && now - last_infotainment_poll_ >= infotainment_interval) {
     ESP_LOGI(TAG, "Polling Infotainment");
-    bool vehicle_is_awake = !state_manager_->is_asleep();
-    vehicle_->infotainment_poll(vehicle_is_awake);
+    vehicle_->infotainment_poll(should_force_wake_infotainment);
     last_infotainment_poll_ = now;
   }
 }
@@ -483,6 +496,8 @@ void TeslaBLEVehicle::force_update() {
 
   ESP_LOGI(TAG, "Force update requested");
   last_infotainment_poll_ = now;
+  last_awake_activity_ = now;
+  last_asleep_state_ = false;
 
   if (vehicle_) {
     vehicle_->vcsec_poll();
@@ -827,11 +842,12 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event,
 void TeslaBLEVehicle::handle_connection_established() {
   if (vehicle_) {
     vehicle_->set_connected(true);
-    ESP_LOGI(TAG, "Connection established - triggering initial polls");
+    ESP_LOGI(TAG, "Connection established - triggering initial VCSEC poll");
     vehicle_->vcsec_poll();
-    vehicle_->infotainment_poll(true);
     last_vcsec_poll_ = millis();
-    last_infotainment_poll_ = millis();
+    last_infotainment_poll_ = 0;
+    last_awake_activity_ = 0;
+    last_asleep_state_ = true;
   }
 
   if (state_manager_)

@@ -191,6 +191,8 @@ private:
     // Polling state
     uint32_t last_vcsec_poll_{0};
     uint32_t last_infotainment_poll_{0};
+    uint32_t last_awake_activity_{0};
+    bool last_asleep_state_{true};
 
     // BLE state
     espbt::ESPBTUUID service_uuid_;
