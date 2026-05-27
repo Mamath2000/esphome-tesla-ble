@@ -188,18 +188,20 @@ void TeslaBLEVehicle::update() {
 
   uint32_t now = millis();
 
+  const bool is_asleep = state_manager_->is_asleep();
+  const bool is_active = state_manager_->is_charging() ||
+                         state_manager_->is_user_present() ||
+                         state_manager_->is_unlocked();
+
   // VCSEC Polling
-  if (now - last_vcsec_poll_ >= vcsec_poll_interval_) {
+  const bool should_poll_vcsec = is_active || !is_asleep;
+  if (should_poll_vcsec && now - last_vcsec_poll_ >= vcsec_poll_interval_) {
     ESP_LOGI(TAG, "Polling VCSEC");
     vehicle_->vcsec_poll();
     last_vcsec_poll_ = now;
   }
 
   // Infotainment Polling - use faster interval when vehicle is active
-  const bool is_asleep = state_manager_->is_asleep();
-  const bool is_active = state_manager_->is_charging() ||
-                         state_manager_->is_user_present() ||
-                         state_manager_->is_unlocked();
   if (last_asleep_state_ && !is_asleep) {
     last_awake_activity_ = now;
     ESP_LOGI(TAG, "Vehicle woke up - enabling infotainment polling window");
@@ -842,8 +844,7 @@ void TeslaBLEVehicle::gattc_event_handler(esp_gattc_cb_event_t event,
 void TeslaBLEVehicle::handle_connection_established() {
   if (vehicle_) {
     vehicle_->set_connected(true);
-    ESP_LOGI(TAG, "Connection established - triggering initial VCSEC poll");
-    vehicle_->vcsec_poll();
+    ESP_LOGI(TAG, "Connection established");
     last_vcsec_poll_ = millis();
     last_infotainment_poll_ = 0;
     last_awake_activity_ = 0;
