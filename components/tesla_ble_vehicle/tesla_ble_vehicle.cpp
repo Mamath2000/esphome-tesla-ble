@@ -167,8 +167,11 @@ void TeslaBLEVehicle::configure_pending_sensors() {
     state_manager_->set_windows_cover(pending_windows_cover_);
   if (pending_charge_port_door_cover_)
     state_manager_->set_charge_port_door_cover(pending_charge_port_door_cover_);
-  if (pending_climate_)
+  if (pending_climate_) {
     state_manager_->set_climate(pending_climate_);
+    // Setup climate presets and fan modes
+    pending_climate_->setup_presets();
+  }
 
   ESP_LOGD(TAG, "Configured %d binary, %d numeric, %d text sensors",
            pending_binary_sensors_.size(), pending_sensors_.size(),
@@ -180,6 +183,18 @@ void TeslaBLEVehicle::loop() {
     vehicle_->loop();
   if (ble_adapter_)
     ble_adapter_->process_write_queue();
+  
+  // Handle pending charging command with wake delay
+  if (pending_charging_command_) {
+    uint32_t elapsed_ms = millis() - charging_delay_start_ms_;
+    if (elapsed_ms >= CHARGING_WAKE_DELAY_MS) {
+      ESP_LOGI(TAG, "Wake delay elapsed, sending charging command");
+      pending_charging_command_ = false;
+      set_charging_state(true);
+    } else if (elapsed_ms % 500 == 0) {  // Log every 500ms for debugging
+      ESP_LOGD(TAG, "Waiting for wake delay: %ums/%ums", elapsed_ms, CHARGING_WAKE_DELAY_MS);
+    }
+  }
 }
 
 void TeslaBLEVehicle::update() {
@@ -402,10 +417,15 @@ void TeslaBLEVehicle::set_charge_port_door_cover(cover::Cover *cvr) {
     state_manager_->set_charge_port_door_cover(cvr);
 }
 
-void TeslaBLEVehicle::set_climate(climate::Climate *clm) {
+void TeslaBLEVehicle::set_climate(TeslaClimate *clm) {
   pending_climate_ = clm;
-  if (state_manager_)
+  if (state_manager_) {
     state_manager_->set_climate(clm);
+    // Setup climate presets and fan modes if already initialized
+    if (clm) {
+      clm->setup_presets();
+    }
+  }
 }
 
 // =============================================================================
@@ -520,6 +540,21 @@ int TeslaBLEVehicle::set_charging_state(bool charging) {
 
   vehicle_->set_charging_state(charging);
   return 0;
+}
+
+void TeslaBLEVehicle::handle_charging_command(bool charging) {
+  ESP_LOGI(TAG, "Charging command received: %s", charging ? "ON" : "OFF");
+  
+  // If charging is being enabled and vehicle is asleep, schedule with wake delay
+  if (charging && state_manager_ && state_manager_->is_asleep()) {
+    ESP_LOGI(TAG, "Vehicle is asleep - scheduling charging with wake delay (%dms)", CHARGING_WAKE_DELAY_MS);
+    pending_charging_command_ = true;
+    charging_delay_start_ms_ = millis();
+    return;
+  }
+  
+  // If disabling charging or vehicle is awake, send immediately
+  set_charging_state(charging);
 }
 
 int TeslaBLEVehicle::set_charging_amps(int amps) {
@@ -1038,15 +1073,18 @@ void TeslaChargePortDoorCover::control(const cover::CoverCall &call) {
 // Climate implementation
 // =============================================================================
 
+void TeslaClimate::setup_presets_internal() {
+  // Call on Climate entity (this) instead of traits to avoid deprecation
+  this->set_supported_custom_presets(
+      {"Normal", "Defrost", "Keep On", "Dog Mode", "Camp Mode"});
+  this->set_supported_custom_fan_modes({"Normal", "Bioweapon Mode"});
+  ESP_LOGD("tesla_ble_climate", "Climate presets and fan modes configured");
+}
+
 climate::ClimateTraits TeslaClimate::traits() {
   auto traits = climate::ClimateTraits();
   traits.set_supported_modes(
       {climate::CLIMATE_MODE_OFF, climate::CLIMATE_MODE_HEAT_COOL});
-  // Custom presets with clear text descriptions
-  traits.set_supported_custom_presets(
-      {"Normal", "Defrost", "Keep On", "Dog Mode", "Camp Mode"});
-  // Custom fan modes with clear text descriptions
-  traits.set_supported_custom_fan_modes({"Normal", "Bioweapon Mode"});
   // Use feature flags for current temperature support
   traits.add_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE);
   traits.set_visual_min_temperature(15.0f);

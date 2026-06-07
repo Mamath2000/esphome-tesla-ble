@@ -27,6 +27,9 @@ namespace tesla_ble_vehicle {
 
 namespace espbt = esphome::esp32_ble_tracker;
 
+// Forward declarations
+class TeslaClimate;
+
 static const char *const TAG = "tesla_ble_vehicle";
 
 // Tesla BLE service UUIDs
@@ -101,7 +104,7 @@ public:
     void set_frunk_cover(cover::Cover *cvr);
     void set_windows_cover(cover::Cover *cvr);
     void set_charge_port_door_cover(cover::Cover *cvr);
-    void set_climate(climate::Climate *clm);
+    void set_climate(TeslaClimate *clm);  // Use TeslaClimate directly
 
     // ==========================================================================
     // Button setters
@@ -121,6 +124,7 @@ public:
 
     // Vehicle control actions
     int set_charging_state(bool charging);
+    void handle_charging_command(bool charging);  // Special handling with wake delay
     int set_charging_amps(int amps);
     int set_charging_limit(int limit);
     
@@ -201,6 +205,11 @@ private:
     uint16_t read_handle_{0};
     uint16_t write_handle_{0};
 
+    // Charging with wake delay state
+    bool pending_charging_command_{false};
+    uint32_t charging_delay_start_ms_{0};
+    static constexpr uint32_t CHARGING_WAKE_DELAY_MS = 2500;  // Wait 2.5s after wake before charging
+
     // ==========================================================================
     // Pending sensors (stored before state manager is initialized)
     // ==========================================================================
@@ -227,8 +236,8 @@ private:
     cover::Cover *pending_windows_cover_{nullptr};
     cover::Cover *pending_charge_port_door_cover_{nullptr};
     
-    // Pending climate
-    climate::Climate *pending_climate_{nullptr};
+    // Pending climate - stored as TeslaClimate for direct access
+    TeslaClimate *pending_climate_{nullptr};
     
     std::string last_rx_hex_;
 
@@ -295,8 +304,18 @@ protected:
         } \
     };
 
-// Define all switch types using the macro
-DEFINE_TESLA_SWITCH(TeslaChargingSwitch, set_charging_state)
+// Define charging switch with special wake+delay handling
+class TeslaChargingSwitch : public TeslaSwitchBase {
+protected:
+    void write_state(bool state) override {
+        if (parent_) {
+            parent_->handle_charging_command(state);
+            publish_state(state);
+        }
+    }
+};
+
+// Define other switch types using the macro
 DEFINE_TESLA_SWITCH(TeslaSteeringWheelHeatSwitch, set_steering_wheel_heat)
 DEFINE_TESLA_SWITCH(TeslaSentryModeSwitch, set_sentry_mode)
 
@@ -377,6 +396,7 @@ protected:
 class TeslaClimate : public climate::Climate {
 public:
     void set_parent(TeslaBLEVehicle *parent) { parent_ = parent; }
+    void setup_presets() { setup_presets_internal(); }  // Public setup method
     climate::ClimateTraits traits() override;
     void control(const climate::ClimateCall &call) override;
     
@@ -384,6 +404,7 @@ public:
     void update_state(bool is_on, float current_temp, float target_temp);
     
 protected:
+    void setup_presets_internal();  // Setup climate presets and fan modes
     TeslaBLEVehicle *parent_{nullptr};
 };
 
