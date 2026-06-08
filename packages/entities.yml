@@ -120,6 +120,21 @@ sensor:
 
   - platform: tesla_ble_vehicle
     tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: evse_max_current
+    id: tesla_evse_max_current
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charge_current_request
+    id: tesla_charge_current_request
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: vehicle_max_charge_current
+    id: tesla_vehicle_max_charge_current
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
     type: outside_temp
     id: tesla_outside_temp
 
@@ -158,6 +173,11 @@ text_sensor:
     tesla_ble_vehicle_id: tesla_ble_vehicle_id
     type: iec61851_state
     id: tesla_iec61851_state
+
+  - platform: tesla_ble_vehicle
+    tesla_ble_vehicle_id: tesla_ble_vehicle_id
+    type: charge_limit_reason
+    id: tesla_charge_limit_reason
 
   - platform: tesla_ble_vehicle
     tesla_ble_vehicle_id: tesla_ble_vehicle_id
